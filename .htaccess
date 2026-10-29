@@ -1,0 +1,21 @@
+# TurFesta হিসাব
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+  RewriteRule (^|/)\. - [F]
+  RewriteRule ^(app|data)(/|$) - [F]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set Strict-Transport-Security "max-age=31536000" env=HTTPS
+</IfModule>
+
+<IfModule mod_php.c>
+  php_value upload_max_filesize 12M
+  php_value post_max_size 14M
+</IfModule>

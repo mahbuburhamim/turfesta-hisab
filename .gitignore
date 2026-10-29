@@ -1,0 +1,7 @@
+app/config.local.php
+data/install.lock
+data/sessions/*
+!data/sessions/.keep
+data/uploads/*
+!data/uploads/.htaccess
+.DS_Store
