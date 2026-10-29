@@ -160,3 +160,6 @@ body.auth{padding:0;min-height:100vh;display:grid;place-items:center;
 .big-mark small{color:var(--muted);opacity:1;font-size:13px}
 
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
+
+.addrow{display:flex;gap:8px}
+.addrow .inp{flex:1}

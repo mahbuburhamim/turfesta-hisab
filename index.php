@@ -85,7 +85,7 @@ $v = (string)@filemtime(__DIR__ . '/assets/app.js') . (string)@filemtime(__DIR__
 <?php exit; endif; ?>
 <body>
 <script type="application/json" id="boot"><?= json_encode([
-  'me' => $me, 'csrf' => $_SESSION['csrf'], 'partners' => PARTNERS, 'methods' => METHODS, 'cats' => CATS,
+  'me' => $me, 'csrf' => $_SESSION['csrf'], 'partners' => PARTNERS, 'methods' => METHODS, 'cats' => all_cats(),
 ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
 
 <header class="top"><div class="top-in">

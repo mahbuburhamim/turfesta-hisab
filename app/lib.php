@@ -19,8 +19,28 @@ const DEFAULT_SHARES = ['hamim' => 33.34, 'amit' => 33.33, 'jami' => 33.33];
 
 function data_dir(): string { return dirname(__DIR__) . '/data'; }
 function is_installed(): bool { return file_exists(data_dir() . '/install.lock'); }
-function cat_ids(): array { return array_column(CATS, 0); }
-function cat_label(string $id): string { foreach (CATS as [$k, $l]) if ($k === $id) return $l; return $id; }
+const SEED_VENDORS = ['Belal Mama', 'Bimol Da', 'Iqbal', 'Eng. Shanto', 'Current', 'Welding', 'Others'];
+
+function custom_cats(): array {
+  $st = db()->prepare('SELECT v FROM settings WHERE k = ?'); $st->execute(['custom_cats']);
+  $v = json_decode((string)$st->fetchColumn(), true);
+  return is_array($v) ? array_values(array_filter($v, fn($c) => is_array($c) && count($c) === 2)) : [];
+}
+function all_cats(): array { static $c = null; if ($c === null) $c = array_merge(CATS, custom_cats()); return $c; }
+function cat_ids(): array { return array_column(all_cats(), 0); }
+function cat_label(string $id): string { foreach (all_cats() as [$k, $l]) if ($k === $id) return $l; return $id; }
+
+/** Small one-time data migrations, safe to call on every request. */
+function migrate(): void {
+  $st = db()->prepare('SELECT 1 FROM settings WHERE k = ?'); $st->execute(['seed_vendors_v1']);
+  if ($st->fetchColumn()) return;
+  $have = array_map('mb_strtolower', db()->query('SELECT name FROM vendors')->fetchAll(PDO::FETCH_COLUMN));
+  $ins = db()->prepare("INSERT INTO vendors (name, phone, work, contract, created_by, created_at) VALUES (?, '', '', 0, 'system', ?)");
+  $added = [];
+  foreach (SEED_VENDORS as $n) { if (!in_array(mb_strtolower($n), $have, true)) { $ins->execute([$n, now()]); $added[] = $n; } }
+  db()->prepare('INSERT INTO settings (k, v, updated_at) VALUES (?,?,?)')->execute(['seed_vendors_v1', '[]', now()]);
+  if ($added) log_act('system', 'প্রাথমিক ভেন্ডর তালিকা যোগ: ' . implode(', ', $added));
+}
 
 function db(): PDO {
   static $pdo = null;

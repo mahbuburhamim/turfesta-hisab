@@ -4,8 +4,9 @@ const BOOT = JSON.parse(document.getElementById("boot").textContent);
 const PARTNERS = BOOT.partners;
 const PAYERS = Object.assign({}, PARTNERS, {fund: "কমন ফান্ড"});
 const METHODS = BOOT.methods;
-const CATS = BOOT.cats;
-const CAT = Object.fromEntries(CATS);
+let CATS = BOOT.cats;
+let CAT = Object.fromEntries(CATS);
+const setCats = c => { if (Array.isArray(c) && c.length) { CATS = c; CAT = Object.fromEntries(CATS); } };
 
 const S = {me: BOOT.me, csrf: BOOT.csrf, ready: false, failed: false, sig: "",
   expenses: [], deposits: [], vendors: [], activity: [], shares: {}, budgets: {},
@@ -23,7 +24,7 @@ const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.g
 const fmtDate = iso => { try { return new Date(iso + "T00:00:00").toLocaleDateString("bn-BD", {day: "numeric", month: "short", year: "numeric"}); } catch (e) { return iso; } };
 const fmtStamp = s => { if (!s) return ""; try { return new Date(String(s).replace(" ", "T") + "+06:00").toLocaleString("bn-BD", {timeZone: "Asia/Dhaka", day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}); } catch (e) { return s; } };
 const sum = (a, f = x => x.amount) => a.reduce((t, x) => t + (Number(f(x)) || 0), 0);
-const who = id => PARTNERS[id] || id || "";
+const who = id => id === "system" ? "সেটআপ" : (PARTNERS[id] || id || "");
 
 let toastT;
 function toast(msg) {
@@ -67,7 +68,7 @@ async function load(force) {
     if (t !== S.sig || force) {
       const j = JSON.parse(t);
       S.sig = t; S.expenses = j.expenses; S.deposits = j.deposits; S.vendors = j.vendors; S.activity = j.activity;
-      S.shares = j.shares || {}; S.budgets = j.budgets || {};
+      S.shares = j.shares || {}; S.budgets = j.budgets || {}; setCats(j.cats);
       S.ready = true; S.failed = false;
       if (force || !busyEditing()) render();
     }
@@ -230,7 +231,7 @@ function vBudget(k) {
       </div></div>`; }).join("");
   const log = S.activity.length ? S.activity.map(a => `<div><b>${esc(who(a.user))}</b> · ${esc(a.detail)} <span class="muted">· ${fmtStamp(a.at)}</span></div>`).join("")
     : `<div class="muted">এখনো কিছু হয়নি।</div>`;
-  return `<section><div class="sec-h"><h2>খাতভিত্তিক বাজেট</h2><span class="small muted num">মোট ${tk(k.budgetTotal)}</span></div>
+  return `<section><div class="sec-h"><h2>খাতভিত্তিক বাজেট</h2><span class="small muted num">মোট ${tk(k.budgetTotal)} · <button class="link" type="button" data-act="newCatSheet">+ নতুন খাত</button></span></div>
     <div class="panel"><div class="cats">${rows}</div>
     <div class="pad" style="border-top:1px solid var(--line)"><button class="btn" data-act="saveBudget" type="button">বাজেট সেভ করুন</button></div></div>
     <p class="small muted" style="margin:6px 2px 0">নির্মাণে বাজেট সাধারণত ছাড়িয়ে যায়। লাল দাগ দেখা দিলেই তিনজন বসে সিদ্ধান্ত নিন।</p></section>
@@ -263,7 +264,12 @@ function openSheet(html) {
   if (f) setTimeout(() => f.focus(), 50);
 }
 function closeSheet() { if (sheetEl) { sheetEl.remove(); sheetEl = null; } }
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeSheet();
+  if (e.key === "Enter" && e.target && (e.target.id === "nc-name" || e.target.id === "nv-name")) {
+    e.preventDefault(); e.target.id === "nc-name" ? addCatInline() : addVendorInline();
+  }
+});
 const head = t => `<div class="sheet-h"><h2>${t}</h2><button class="x" type="button" data-act="close" aria-label="বন্ধ">×</button></div>`;
 const seg = (name, obj, val) => `<div class="seg" role="radiogroup">${Object.entries(obj).map(([v, l]) => `<input type="radio" name="${name}" id="${name}-${v}" value="${v}" ${v === val ? "checked" : ""}><label for="${name}-${v}">${esc(l)}</label>`).join("")}</div>`;
 const radio = name => (document.querySelector(`input[name=${name}]:checked`) || {}).value || "";
@@ -300,17 +306,51 @@ async function prepFile(f) {
   return f;
 }
 
+function catOptions(sel) {
+  return `<option value="">বাছাই করুন</option>` + CATS.map(([id, l]) => `<option value="${id}" ${sel === id ? "selected" : ""}>${esc(l)}</option>`).join("") + `<option value="__new">+ নতুন খাত যোগ করুন…</option>`;
+}
+function vendorOptions(sel) {
+  return `<option value="">কোনো ভেন্ডর নয়</option>` + [...S.vendors].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map(v => `<option value="${v.id}" ${String(sel) === String(v.id) ? "selected" : ""}>${esc(v.name)}</option>`).join("") + `<option value="__new">+ নতুন ভেন্ডর যোগ করুন…</option>`;
+}
+async function addCatInline() {
+  const inp = $("#nc-name"), err = $("#nc-err"), label = inp.value.trim(); err.textContent = "";
+  if (!label) { err.textContent = "খাতের নাম লিখুন।"; return; }
+  try { const r = await api("add_category", {label}); await load(true); $("#f-cat").innerHTML = catOptions(r.id); $("#new-cat").hidden = true; inp.value = ""; toast(r.existed ? "এই খাত আগেই ছিল, বাছাই করা হলো" : "নতুন খাত যোগ হয়েছে"); }
+  catch (e) { err.textContent = e.message; }
+}
+async function addVendorInline() {
+  const inp = $("#nv-name"), err = $("#nv-err"), name = inp.value.trim(); err.textContent = "";
+  if (!name) { err.textContent = "নাম লিখুন।"; return; }
+  try { const r = await api("save_vendor", {name, phone: "", work: $("#f-cat").value && $("#f-cat").value !== "__new" ? $("#f-cat").value : "", contract: ""}); await load(true); $("#f-vendor").innerHTML = vendorOptions(r.id); $("#new-vendor").hidden = true; inp.value = ""; toast(r.existed ? "এই ভেন্ডর আগেই ছিল, বাছাই করা হলো" : "নতুন ভেন্ডর যোগ হয়েছে"); }
+  catch (e) { err.textContent = e.message; }
+}
+function newCatSheet() {
+  openSheet(head("নতুন খাত") + `<form id="ncForm" style="display:grid;gap:12px" novalidate>
+    <div class="field"><label for="nc2">খাতের নাম</label><input class="inp" id="nc2" maxlength="40" placeholder="যেমন: রং ও পেইন্ট"></div>
+    <div class="err" id="nc2-err"></div><button class="btn" type="submit">যোগ করুন</button></form>`);
+  $("#ncForm").addEventListener("submit", async ev => { ev.preventDefault();
+    const label = $("#nc2").value.trim(); if (!label) { $("#nc2-err").textContent = "খাতের নাম লিখুন।"; return; }
+    try { const r = await api("add_category", {label}); closeSheet(); toast(r.existed ? "এই খাত আগেই আছে" : "নতুন খাত যোগ হয়েছে"); await load(true); }
+    catch (e) { $("#nc2-err").textContent = e.message; } });
+}
+
 function expenseForm() {
-  const vOpts = `<option value="">কোনো ভেন্ডর নয়</option>` + [...S.vendors].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map(v => `<option value="${v.id}">${esc(v.name)}</option>`).join("");
+  const vOpts = vendorOptions("");
   openSheet(head("নতুন খরচ") + `<form id="expForm" style="display:grid;gap:14px" novalidate>
     <div class="field"><label for="f-amt">টাকার পরিমাণ</label><input class="inp amt num" id="f-amt" inputmode="numeric" placeholder="৳০" autocomplete="off"></div>
     <div class="two">
       <div class="field"><label for="f-date">তারিখ</label><input class="inp" type="date" id="f-date" value="${todayISO()}" max="${todayISO()}"></div>
-      <div class="field"><label for="f-cat">খাত</label><select class="inp" id="f-cat"><option value="">বাছাই করুন</option>${CATS.map(([id, l]) => `<option value="${id}">${esc(l)}</option>`).join("")}</select></div>
+      <div class="field"><label for="f-cat">খাত</label><select class="inp" id="f-cat">${catOptions("")}</select></div>
     </div>
+    <div class="field" id="new-cat" hidden><label for="nc-name">নতুন খাতের নাম</label>
+      <div class="addrow"><input class="inp" id="nc-name" maxlength="40" placeholder="যেমন: রং ও পেইন্ট"><button class="btn sm" type="button" data-act="addCatInline">যোগ</button></div>
+      <div class="err" id="nc-err"></div></div>
     <div class="field"><span class="lab">টাকা কে দিল</span>${seg("paid", PAYERS, S.me)}</div>
     <div class="field"><span class="lab">কীভাবে</span>${seg("method", METHODS, "cash")}</div>
     <div class="field"><label for="f-vendor">ভেন্ডর / ঠিকাদার</label><select class="inp" id="f-vendor">${vOpts}</select></div>
+    <div class="field" id="new-vendor" hidden><label for="nv-name">নতুন ভেন্ডরের নাম</label>
+      <div class="addrow"><input class="inp" id="nv-name" maxlength="80" placeholder="যেমন: রহিম কনস্ট্রাকশন"><button class="btn sm" type="button" data-act="addVendorInline">যোগ</button></div>
+      <div class="err" id="nv-err"></div></div>
     <div class="field"><label for="f-note">বিবরণ</label><input class="inp" id="f-note" placeholder="যেমন: ২০ ট্রাক বালু, প্রতি ট্রাক ৳৩,৫০০" maxlength="200"></div>
     <div class="field"><span class="lab">রসিদ / ভাউচারের ছবি (ঐচ্ছিক)</span>
       <label class="file" id="f-filebox" for="f-file"><span id="f-filetxt">ছবি তুলুন বা গ্যালারি থেকে বাছুন (PDF-ও চলবে)</span></label>
@@ -330,7 +370,8 @@ async function saveExpense(ev) {
   const paidBy = radio("paid"), method = radio("method"), file = $("#f-file").files[0];
   if (!(amount > 0)) { err.textContent = "টাকার পরিমাণ লিখুন।"; return; }
   if (!date) { err.textContent = "তারিখ দিন।"; return; }
-  if (!category) { err.textContent = "খাত বাছাই করুন।"; return; }
+  if (!category || category === "__new") { err.textContent = "খাত বাছাই করুন।"; return; }
+  if ($("#f-vendor").value === "__new") { err.textContent = "নতুন ভেন্ডরের নাম লিখে “যোগ” চাপুন, অথবা তালিকা থেকে বাছাই করুন।"; return; }
   if (!paidBy) { err.textContent = "টাকা কে দিল বাছাই করুন।"; return; }
   btn.disabled = true; btn.textContent = file ? "ছবি আপলোড হচ্ছে…" : "সেভ হচ্ছে…";
   const fd = new FormData();
@@ -420,7 +461,7 @@ function vendorForm(id) {
   openSheet(head(id ? "ভেন্ডর এডিট" : "নতুন ভেন্ডর") + `<form id="venForm" style="display:grid;gap:14px" novalidate>
     <div class="field"><label for="v-name">নাম</label><input class="inp" id="v-name" maxlength="80" value="${esc(v.name || "")}" placeholder="যেমন: রহিম কনস্ট্রাকশন"></div>
     <div class="two"><div class="field"><label for="v-phone">ফোন</label><input class="inp num" id="v-phone" inputmode="tel" maxlength="20" value="${esc(v.phone || "")}"></div>
-      <div class="field"><label for="v-work">কাজ</label><select class="inp" id="v-work">${CATS.map(([c, l]) => `<option value="${c}" ${v.work === c ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></div></div>
+      <div class="field"><label for="v-work">কাজ</label><select class="inp" id="v-work"><option value="">—</option>${CATS.map(([c, l]) => `<option value="${c}" ${v.work === c ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></div></div>
     <div class="field"><label for="v-con">চুক্তির মোট টাকা</label><input class="inp num" id="v-con" inputmode="numeric" value="${v.contract ? bn(v.contract) : ""}" placeholder="চুক্তি না থাকলে ফাঁকা রাখুন"></div>
     <div class="err" id="v-ferr"></div><button class="btn" id="v-save" type="submit">সেভ করুন</button></form>`);
   $("#venForm").addEventListener("submit", async ev => {
@@ -490,9 +531,14 @@ document.addEventListener("click", ev => {
   else if (a === "saveShares") saveShares(t);
   else if (a === "showNoReceipt") { S.filter = {cat: "all", who: "nor"}; location.hash = "#expenses"; }
   else if (a === "fWho") { S.filter.who = t.dataset.v; render(); }
+  else if (a === "addCatInline") addCatInline();
+  else if (a === "addVendorInline") addVendorInline();
+  else if (a === "newCatSheet") newCatSheet();
 });
 document.addEventListener("change", ev => {
   if (ev.target.id === "fCat") { S.filter.cat = ev.target.value; render(); }
+  else if (ev.target.id === "f-cat") { const n = ev.target.value === "__new"; $("#new-cat").hidden = !n; if (n) $("#nc-name").focus(); }
+  else if (ev.target.id === "f-vendor") { const n = ev.target.value === "__new"; $("#new-vendor").hidden = !n; if (n) $("#nv-name").focus(); }
   else if (ev.target.id === "r-file") addReceipt(ev.target);
 });
 addEventListener("hashchange", () => { closeSheet(); render(); scrollTo(0, 0); });

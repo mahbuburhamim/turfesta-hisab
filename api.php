@@ -125,6 +125,7 @@ try {
   switch ($a) {
 
     case 'state':
+      migrate();
       $exp = array_map('exp_out', db()->query('SELECT * FROM expenses ORDER BY spent_on DESC, id DESC')->fetchAll());
       $dep = array_map('dep_out', db()->query('SELECT * FROM deposits ORDER BY paid_on DESC, id DESC')->fetchAll());
       $ven = array_map('ven_out', db()->query('SELECT * FROM vendors ORDER BY name')->fetchAll());
@@ -132,7 +133,23 @@ try {
       out([
         'expenses' => $exp, 'deposits' => $dep, 'vendors' => $ven, 'activity' => $act,
         'shares' => get_setting('shares', DEFAULT_SHARES), 'budgets' => (object)get_setting('budgets', []),
+        'cats' => all_cats(),
       ]);
+
+    case 'add_category':
+      if (!$isPost) fail('ভুল অনুরোধ।', 405);
+      $label = v_text($in['label'] ?? '', 40);
+      if ($label === '') fail('খাতের নাম লিখুন।');
+      foreach (all_cats() as [$cid, $cl]) {
+        if (mb_strtolower($cl) === mb_strtolower($label)) out(['ok' => true, 'id' => $cid, 'existed' => true]);
+      }
+      $custom = custom_cats();
+      if (count($custom) >= 60) fail('আর নতুন খাত যোগ করা যাবে না।');
+      $cid = 'c' . bin2hex(random_bytes(4));
+      $custom[] = [$cid, $label];
+      put_setting('custom_cats', $custom, $me);
+      log_act($me, 'নতুন খাত: ' . $label);
+      out(['ok' => true, 'id' => $cid]);
 
     case 'add_expense':
       if (!$isPost) fail('ভুল অনুরোধ।', 405);
@@ -200,7 +217,8 @@ try {
       $vname = v_text($in['name'] ?? '', 80);
       if ($vname === '') fail('নাম লিখুন।');
       $phone = v_text($in['phone'] ?? '', 20);
-      $work = v_in($in['work'] ?? '', cat_ids(), 'কাজ');
+      $work = (string)($in['work'] ?? '');
+      if ($work !== '') $work = v_in($work, cat_ids(), 'কাজ');
       $contract = v_money0($in['contract'] ?? '');
       if (!empty($in['id'])) {
         $id = v_id($in['id']);
@@ -211,12 +229,16 @@ try {
           ->execute([$vname, $phone, $work, $contract, $me, now(), $id]);
         $chg = ((float)$old !== $contract) ? ' · চুক্তি ' . bn_money((float)$old) . ' → ' . bn_money($contract) : '';
         log_act($me, 'ভেন্ডর এডিট: ' . $vname . $chg);
-      } else {
-        db()->prepare('INSERT INTO vendors (name, phone, work, contract, created_by, created_at) VALUES (?,?,?,?,?,?)')
-          ->execute([$vname, $phone, $work, $contract, $me, now()]);
-        log_act($me, 'নতুন ভেন্ডর: ' . $vname . ($contract ? ' · চুক্তি ' . bn_money($contract) : ''));
+        out(['ok' => true, 'id' => $id]);
       }
-      out(['ok' => true]);
+      $st = db()->prepare('SELECT id FROM vendors WHERE LOWER(name) = LOWER(?) LIMIT 1'); $st->execute([$vname]);
+      $dup = $st->fetchColumn();
+      if ($dup !== false) out(['ok' => true, 'id' => (int)$dup, 'existed' => true]);
+      db()->prepare('INSERT INTO vendors (name, phone, work, contract, created_by, created_at) VALUES (?,?,?,?,?,?)')
+        ->execute([$vname, $phone, $work, $contract, $me, now()]);
+      $newId = (int)db()->lastInsertId();
+      log_act($me, 'নতুন ভেন্ডর: ' . $vname . ($contract ? ' · চুক্তি ' . bn_money($contract) : ''));
+      out(['ok' => true, 'id' => $newId]);
 
     case 'save_budget':
       if (!$isPost) fail('ভুল অনুরোধ।', 405);
