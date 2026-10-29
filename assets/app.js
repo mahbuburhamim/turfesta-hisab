@@ -96,6 +96,8 @@ function calc() {
   return {exp, deps, total, byCat, contrib, capital, fair, diff, fund, budgetTotal, vendorPaid, vendorDue, noReceipt};
 }
 const vendorName = id => (S.vendors.find(v => v.id === id) || {}).name;
+const OTHER_V = ["অন্যান্য", "others"];
+const byVendor = (a, b) => (OTHER_V.includes((a.name || "").toLowerCase()) - OTHER_V.includes((b.name || "").toLowerCase())) || (a.name || "").localeCompare(b.name || "", "bn");
 const byNewest = (a, b) => (b.date || "").localeCompare(a.date || "") || (b.createdAt || "").localeCompare(a.createdAt || "") || b.id - a.id;
 
 /* ---------- rendering ---------- */
@@ -212,7 +214,7 @@ function vFund(k) {
 }
 
 function vVendors(k) {
-  const list = [...S.vendors].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  const list = [...S.vendors].sort(byVendor);
   return `<section><div class="sec-h"><h2>ভেন্ডর ও ঠিকাদার</h2><button class="btn sm" data-act="newVendor" type="button">+ নতুন</button></div>
     <div class="panel rows">${list.length ? list.map(v => { const paid = k.vendorPaid[v.id] || 0, due = (v.contract || 0) - paid;
       return `<button class="row" data-act="openVendor" data-id="${v.id}" type="button">
@@ -310,7 +312,7 @@ function catOptions(sel) {
   return `<option value="">বাছাই করুন</option>` + CATS.map(([id, l]) => `<option value="${id}" ${sel === id ? "selected" : ""}>${esc(l)}</option>`).join("") + `<option value="__new">+ নতুন খাত যোগ করুন…</option>`;
 }
 function vendorOptions(sel) {
-  return `<option value="">কোনো ভেন্ডর নয়</option>` + [...S.vendors].sort((a, b) => (a.name || "").localeCompare(b.name || "")).map(v => `<option value="${v.id}" ${String(sel) === String(v.id) ? "selected" : ""}>${esc(v.name)}</option>`).join("") + `<option value="__new">+ নতুন ভেন্ডর যোগ করুন…</option>`;
+  return `<option value="">কোনো ভেন্ডর নয়</option>` + [...S.vendors].sort(byVendor).map(v => `<option value="${v.id}" ${String(sel) === String(v.id) ? "selected" : ""}>${esc(v.name)}</option>`).join("") + `<option value="__new">+ নতুন ভেন্ডর যোগ করুন…</option>`;
 }
 async function addCatInline() {
   const inp = $("#nc-name"), err = $("#nc-err"), label = inp.value.trim(); err.textContent = "";

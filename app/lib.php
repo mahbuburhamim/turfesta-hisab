@@ -19,7 +19,9 @@ const DEFAULT_SHARES = ['hamim' => 33.34, 'amit' => 33.33, 'jami' => 33.33];
 
 function data_dir(): string { return dirname(__DIR__) . '/data'; }
 function is_installed(): bool { return file_exists(data_dir() . '/install.lock'); }
-const SEED_VENDORS = ['Belal Mama', 'Bimol Da', 'Iqbal', 'Eng. Shanto', 'Current', 'Welding', 'Others'];
+const SEED_VENDORS = ['বেলাল মামা', 'বিমল দা', 'ইকবাল', 'ইঞ্জি. শান্ত', 'কারেন্ট', 'ওয়েল্ডিং', 'অন্যান্য'];
+const VENDOR_BN = ['Belal Mama' => 'বেলাল মামা', 'Bimol Da' => 'বিমল দা', 'Iqbal' => 'ইকবাল', 'Eng. Shanto' => 'ইঞ্জি. শান্ত',
+  'Current' => 'কারেন্ট', 'Welding' => 'ওয়েল্ডিং', 'Others' => 'অন্যান্য'];
 
 function custom_cats(): array {
   $st = db()->prepare('SELECT v FROM settings WHERE k = ?'); $st->execute(['custom_cats']);
@@ -32,6 +34,14 @@ function cat_label(string $id): string { foreach (all_cats() as [$k, $l]) if ($k
 
 /** Small one-time data migrations, safe to call on every request. */
 function migrate(): void {
+  $st = db()->prepare('SELECT 1 FROM settings WHERE k = ?'); $st->execute(['vendors_bn_v1']);
+  if (!$st->fetchColumn()) {
+    $up = db()->prepare('UPDATE vendors SET name = ? WHERE name = ?');
+    $n = 0;
+    foreach (VENDOR_BN as $en => $bn) { $up->execute([$bn, $en]); $n += $up->rowCount(); }
+    db()->prepare('INSERT INTO settings (k, v, updated_at) VALUES (?,?,?)')->execute(['vendors_bn_v1', '[]', now()]);
+    if ($n) log_act('system', 'ভেন্ডরের নাম বাংলায় করা হয়েছে');
+  }
   $st = db()->prepare('SELECT 1 FROM settings WHERE k = ?'); $st->execute(['seed_vendors_v1']);
   if ($st->fetchColumn()) return;
   $have = array_map('mb_strtolower', db()->query('SELECT name FROM vendors')->fetchAll(PDO::FETCH_COLUMN));
