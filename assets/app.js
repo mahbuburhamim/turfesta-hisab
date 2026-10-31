@@ -154,12 +154,10 @@ function vHome(k) {
     </div></section>`;
 
   const ptab = `<section><div class="sec-h"><h2>পার্টনারের হিসাব</h2><span class="small muted">জমা + নিজের পকেটের খরচ</span></div>
-    <div class="panel tbl"><table class="num"><thead><tr><th>পার্টনার</th><th>দিয়েছেন</th><th>ভাগ অনুযায়ী</th><th>পার্থক্য</th></tr></thead><tbody>
-    ${Object.keys(PARTNERS).map(p => { const d = k.diff[p]; const cls = Math.abs(d) < 1 ? "" : d > 0 ? "pos" : "neg";
-      return `<tr><td>${esc(PARTNERS[p])} <span class="muted small">${pct(S.shares[p])}%</span></td><td>${tk(k.contrib[p])}</td><td>${tk(k.fair[p])}</td>
-      <td class="${cls}">${Math.abs(d) < 1 ? "সমান" : (d > 0 ? "+" : "") + tk(d)}</td></tr>`; }).join("")}
-    </tbody></table></div>
-    <p class="small muted" style="margin:6px 2px 0">+ মানে ভাগের চেয়ে বেশি দিয়েছেন, অন্যদের কাছে পাবেন। − মানে আরও দিতে হবে।</p></section>`;
+    <div class="panel rows">
+    ${Object.keys(PARTNERS).map(p => `<div class="row" style="cursor:default;align-items:center"><div class="main"><div class="t">${esc(PARTNERS[p])}</div></div>
+      <div class="amt num" style="font-size:20px;font-weight:800">${tk(k.contrib[p])}</div></div>`).join("")}
+    </div></section>`;
 
   const cats = CATS.filter(([id]) => k.byCat[id] || S.budgets[id]).sort((a, b) => (k.byCat[b[0]] || 0) - (k.byCat[a[0]] || 0)).slice(0, 6);
   const catSec = cats.length ? `<section><div class="sec-h"><h2>খাতভিত্তিক খরচ</h2><a href="#budget">বাজেট</a></div>
